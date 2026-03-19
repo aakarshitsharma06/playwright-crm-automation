@@ -41,12 +41,21 @@ test.describe('Products Module CRUD Operations', () => {
     await productsPage.navigateToProducts(process.env.MERCHANT_ID!);
   });
 
-  test('Create Product Successfully', async () => {
+  test('Create Product Successfully @smoke @crud', async () => {
+    // Intercept API response for the bonus: API Validation
+    const responsePromise = productsPage.page.waitForResponse(
+      (response) => response.url().includes('products') && response.request().method() === 'POST',
+      { timeout: 15000 }
+    );
+
     await productsPage.createProduct({
       name: PRODUCT_NAME,
       price: testData.product.price,
       sku: `${testData.product.sku}-${RUN_ID}`,  // Unique SKU per run to avoid duplicates
     });
+
+    const response = await responsePromise;
+    expect(response.status()).toBeLessThan(400); // 200 or 201
 
     // Verify product appears in listing
     await productsPage.searchProduct(PRODUCT_NAME);
@@ -54,22 +63,30 @@ test.describe('Products Module CRUD Operations', () => {
     await expect(row).toBeVisible({ timeout: 10000 });
   });
 
-  test('Read / Verify Product', async () => {
+  test('Read / Verify Product @smoke', async () => {
     await productsPage.searchProduct(PRODUCT_NAME);
     const row = await productsPage.getProductRow(PRODUCT_NAME);
 
     // Validate Name appears in the row
     await expect(row).toContainText(PRODUCT_NAME, { timeout: 10000 });
 
-    // Validate there is a status badge or Active indicator
-    const statusBadge = row.locator('.ant-badge, [class*="status"], [class*="badge"]').first();
-    const count = await statusBadge.count();
-    if (count > 0) {
-      await expect(statusBadge).toBeVisible();
-    }
+    // Validate Status (Requirement: Status shows Active)
+    await expect(row.locator('.ant-tag:has-text("Active"), .ant-badge:has-text("Active")')).toBeVisible();
+
+    // Validate Variant count (Requirement: Validate variant count)
+    await expect(row.locator('td:has-text("variants")')).toBeVisible();
   });
 
-  test('Update Product', async () => {
+  test('Validate Pagination @bonus', async () => {
+    // Navigate to products without search to see multiple items and pagination
+    await productsPage.navigateToProducts(process.env.MERCHANT_ID!);
+    
+    // Check if pagination controls are present (Look for 'Show per page' dropdown or pagination class)
+    const pagination = productsPage.page.locator('.ant-pagination, .ant-table-pagination, :text("Show per page")').first();
+    await expect(pagination).toBeVisible({ timeout: 15000 });
+  });
+
+  test('Update Product @crud', async () => {
     await productsPage.searchProduct(PRODUCT_NAME);
     await productsPage.updateProduct(PRODUCT_NAME, { name: UPDATED_NAME });
 
@@ -79,7 +96,7 @@ test.describe('Products Module CRUD Operations', () => {
     await expect(updatedRow).toBeVisible({ timeout: 10000 });
   });
 
-  test('Delete Product', async () => {
+  test('Delete Product @smoke @crud', async () => {
     await productsPage.navigateToProducts(process.env.MERCHANT_ID!);
     await productsPage.searchProduct(UPDATED_NAME);
     await productsPage.deleteProduct(UPDATED_NAME);

@@ -27,7 +27,7 @@ export class LoginPage extends BasePage {
 
     // Step 2: Password - wait for field to appear after step transition
     if (password) {
-      await this.passwordInput.waitFor({ state: 'visible' });
+      await this.passwordInput.waitFor({ state: 'visible', timeout: 30000 });
       await this.fillInput(this.passwordInput, password);
       await this.clickElement(this.nextButton);
     }
