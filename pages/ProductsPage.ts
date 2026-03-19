@@ -97,15 +97,21 @@ export class ProductsPage extends BasePage {
   }
 
   async searchProduct(name: string) {
-    await this.searchInput.waitFor({ state: 'visible' });
+    // Ensure search input is visible and stable
+    await this.searchInput.waitFor({ state: 'visible', timeout: 15000 });
     
-    // Use the extremely robust fill to avoid React state data wiping
+    // Clear and fill using the robust method to avoid React state data wiping
     await this.robustFill(this.searchInput, name);
     
     await this.searchInput.press('Enter');
-    // Wait for table to refresh with filtered results
-    await this.page.waitForTimeout(2500);
-    await this.waitForPageLoad();
+    
+    // Wait for the table to refresh — instead of a static timeout, 
+    // we wait for the pagination or table rows to update their state
+    await this.page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
+    await Promise.all([
+      this.page.waitForSelector('tr.ant-table-row, .ant-empty', { state: 'visible', timeout: 10000 }),
+      this.waitForPageLoad()
+    ]);
   }
 
   async getProductRow(name: string): Promise<Locator> {
@@ -186,75 +192,75 @@ export class ProductsPage extends BasePage {
 
   async deleteProduct(name: string) {
     const row = await this.getProductRow(name);
+    
+    // Guard: Verify row exists before proceeding to avoid timeout hangs
+    if (await row.count() === 0) {
+      throw new Error(`Product "${name}" not found in listing. Cannot delete.`);
+    }
 
     // Strategy 1: Checkbox + Bulk Action Delete
     const checkbox = row.locator('input[type="checkbox"], .ant-checkbox-input').first();
-    if (await checkbox.count() > 0) {
+    if (await checkbox.isVisible()) {
       await this.clickElement(checkbox);
-      await this.page.waitForTimeout(500);
       
       const globalDeleteBtn = this.page.locator('button:has-text("Delete"), button:has-text("Delete Selected"), .anticon-delete, [aria-label="delete"]').filter({ hasNotText: 'Search' }).first();
       
       if (await globalDeleteBtn.isVisible()) {
         await this.clickElement(globalDeleteBtn);
-        await this.page.waitForTimeout(500);
         
         // Confirm deletion
         const confirmBtn = this.page.locator('.ant-popconfirm button.ant-btn-primary, .ant-modal-confirm-btns button.ant-btn-primary, button:has-text("OK"), button:has-text("Yes")').first();
         await confirmBtn.waitFor({ state: 'visible', timeout: 5000 });
         await confirmBtn.click();
         
-        await this.page.waitForTimeout(2000);
         await this.waitForPageLoad();
         return;
       }
     }
 
     // Strategy 2: Click into product details/edit page and delete from there
-    const productLink = row.locator('a.product-link').first();
+    const productLink = row.locator('a').first();
     await this.clickElement(productLink);
 
-    // Wait for the edit page form to start mounting before we look for the loader
-    await this.productNameInput.waitFor({ state: 'visible' });
-    await this.waitForLoader(30000);  // Wait up to 30s for API data fetching to complete
+    // Wait for form to mount
+    await this.productNameInput.waitFor({ state: 'visible', timeout: 30000 });
+    await this.waitForLoader(30000); 
+
     const moreActionBtn = this.page.locator('button:has-text("More Action"), .ant-dropdown-trigger:has-text("More Action")').first();
-    
-    // Wait for the More Action button to become available, then click it + verify dropdown appeared
     await moreActionBtn.waitFor({ state: 'visible', timeout: 15000 });
     
     const pageDeleteBtn = this.page.locator('.ant-dropdown-menu-item:has-text("Delete"), .ant-dropdown-menu li:has-text("Delete"), li:has-text("Delete")').first();
     
-    // Retry clicking More Action until the dropdown's Delete item appears (handles spinner-intercepted clicks)
+    // Attempt to open dropdown and find Delete
     for (let attempt = 0; attempt < 3; attempt++) {
       await moreActionBtn.evaluate((btn: HTMLElement) => btn.click());
       await this.page.waitForTimeout(1000);
       if (await pageDeleteBtn.isVisible()) break;
     }
 
-    // Click the Delete option inside the dropdown using native click to bypass any stuck loaders
     await pageDeleteBtn.waitFor({ state: 'visible', timeout: 5000 });
     await pageDeleteBtn.evaluate((btn: HTMLElement) => btn.click());
 
     try {
       const pageConfirmBtn = this.page.locator('.ant-modal-confirm-btns button.ant-btn-primary, button.ant-btn-primary:has-text("OK"), button.ant-btn-primary:has-text("Confirm"), button:has-text("Yes"), button.ant-btn-dangerous').first();
-      await pageConfirmBtn.waitFor({ state: 'visible', timeout: 3000 });
+      await pageConfirmBtn.waitFor({ state: 'visible', timeout: 5000 });
       await pageConfirmBtn.click();
     } catch {
-      // Confirmation might not exist or the page might have instantly redirected after delete
+      // Might have redirected instantly
     }
     
-    // Wait for the delete API response
-    const deleteResponsePromise = this.page.waitForResponse(
+    // Wait for the delete API response but don't hang if it's already done
+    await this.page.waitForResponse(
       (response) => response.url().includes('products') && response.request().method() === 'DELETE',
-      { timeout: 10000 }
+      { timeout: 15000 }
     ).catch(() => null);
-    await deleteResponsePromise;
 
-    await this.page.waitForTimeout(2000);
-    // Only navigate back if we aren't already redirected
-    if (this.page.url().includes('/edit') || this.page.url().match(/\/products\/\d+$/)) {
-      await this.waitForPageLoad();
-    }
+    // Final clean up navigation — wrapped in try/catch to avoid Target Closed errors on timeout
+    try {
+      if (this.page.url().includes('/edit')) {
+        await this.goBackToListing();
+      }
+    } catch (e) { /* Ignore target closed */ }
   }
 
   async getProductStatus(name: string): Promise<string> {
