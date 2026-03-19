@@ -2,6 +2,9 @@
 
 This project automates the Products Module (CRUD operations) of the Gokwik CRM Admin Panel. It is designed to be highly robust, scalable, and resilient to common frontend framework flakiness (such as React hydration issues and SPAs with hanging loaders).
 
+> [!TIP]
+> **Technical Deep Dive:** For details on how we solved the "Target Closed" errors and implemented advanced React-syncing stability guards, see the [STABILITY_GUIDE.md](./STABILITY_GUIDE.md).
+
 ## 🚀 Key Framework Features & Architecture
 
 This repository isn't just a collection of scripts; it's a carefully designed automation framework built on industry best practices:
