@@ -1,0 +1,12 @@
+{
+  "product": {
+    "name": "Automation Test Product",
+    "sku": "PW-SKU",
+    "price": "100",
+    "category": "Electronics",
+    "updatedName": "Automation Test Product Updated"
+  },
+  "negativeProduct": {
+    "name": ""
+  }
+}

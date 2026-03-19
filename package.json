@@ -1,0 +1,22 @@
+{
+  "name": "playwright-crm-automation",
+  "version": "1.0.0",
+  "description": "CRM Admin Panel automation using Playwright",
+  "main": "index.js",
+  "scripts": {
+    "test": "npx playwright test",
+    "test:headed": "npx playwright test --headed",
+    "test:auth": "npx playwright test tests/auth.spec.ts",
+    "test:products": "npx playwright test tests/products.spec.ts",
+    "report": "npx playwright show-report"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.43.0",
+    "@types/node": "^20.12.7",
+    "dotenv": "^16.4.5",
+    "typescript": "^5.4.5"
+  }
+}
